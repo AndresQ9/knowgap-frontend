@@ -102,8 +102,7 @@ const InstructorView = () => {
 
   const sendTokenToServer = async (token) => {
     setTokenStatus('Sending token...');
-    const baseUrl =
-      'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
+    const baseUrl = process.env.BACKEND_URL;
     const teacherCourses = await fetchTeacherCourses();
     const userId = await fetchUserProfile();
 
@@ -299,8 +298,7 @@ const InstructorView = () => {
   };
 
   const fetchCourseVideos = async (courseId) => {
-    const baseUrl =
-      'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
+    const baseUrl = process.env.BACKEND_URL;
     try {
       const response = await fetch(`${baseUrl}/get-course-videos`, {
         method: 'POST',
@@ -336,8 +334,7 @@ const InstructorView = () => {
   };
 
   const removeVideoFromQuestion = async (questionId, quizId) => {
-    const baseUrl =
-      'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
+    const baseUrl = process.env.BACKEND_URL;
     try {
       const response = await fetch(`${baseUrl}/remove-video`, {
         method: 'POST',
@@ -369,7 +366,8 @@ const InstructorView = () => {
   };
 
   const handleAddVideo = async () => {
-    if (!newVideo.questionId || !newVideo.url) {
+    const baseUrl = process.env.BACKEND_URL;
+    if (!newVideo.title || !newVideo.url || !newVideo.questionId) {
       console.log('Missing required fields');
       return;
     }
@@ -392,9 +390,6 @@ const InstructorView = () => {
     console.log('Quiz ID:', quizId);
     console.log('Question ID:', questionId);
     console.log('Video URL:', newVideo.url);
-
-    const baseUrl =
-      'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
 
     try {
       const response = await fetch(`${baseUrl}/add-video`, {
@@ -437,51 +432,11 @@ const InstructorView = () => {
     }
   };
 
-  // const handleAddVideo = async () => {
-  //   const baseUrl =
-  //     'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
-  //   if (!newVideo.questionId || !newVideo.url) {
-  //     setNotifications([
-  //       ...notifications,
-  //       'Please fill in all required fields',
-  //     ]);
-  //     return;
-  //   }
-
-  //   const selectedQuestion = courseQuestions.find(
-  //     (q) => q.question_id === newVideo.questionId
-  //   );
-
-  //   try {
-  //     const response = await fetch(`${baseUrl}/add-video`, {
-  //       method: 'POST',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //       },
-  //       body: JSON.stringify({
-  //         quiz_id: selectedQuestion.quiz_id,
-  //         question_id: newVideo.questionId,
-  //         video_link: newVideo.url,
-  //       }),
-  //     });
-
-  //     if (response.ok) {
-  //       const result = await response.json();
-  //       setNewVideo({ title: '', url: '', questionId: '' });
-  //       fetchCourseVideos(fetchCurrentCourseId());
-  //       setNotifications([...notifications, 'Video added successfully']);
-  //     }
-  //   } catch (error) {
-  //     setNotifications([...notifications, 'Failed to add video']);
-  //   }
-  // };
-
   const updateCourseContext = async () => {
+    const baseUrl = process.env.BACKEND_URL;
     const courseId = fetchCurrentCourseId();
     if (!courseId) return;
 
-    const baseUrl =
-      'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
     try {
       const response = await fetch(`${baseUrl}/update-course-context`, {
         method: 'POST',
@@ -507,9 +462,8 @@ const InstructorView = () => {
   };
 
   const handleSaveEdit = async () => {
-    const baseUrl =
-      'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
-    if (!editingVideo?.newLink) return;
+    const baseUrl = process.env.BACKEND_URL;
+    if (!editingVideo) return;
 
     const question = courseQuestions.find(
       (q) => q.question_id === editingVideo.questionId

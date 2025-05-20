@@ -93,7 +93,7 @@ const StudentView = () => {
   const fetchSupportVideos = async (riskLevel) => {
     try {
       const response = await fetch(
-        'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app/get-support-video',
+        `${process.env.BACKEND_URL}/get-support-video`,
         {
           method: 'POST',
           headers: {
@@ -249,8 +249,7 @@ const StudentView = () => {
   };
 
   const fetchVideoRecommendations = async (userId, courseId) => {
-    const baseUrl =
-      'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
+    const baseUrl = process.env.BACKEND_URL;
 
     try {
       const response = await fetch(`${baseUrl}/get-assessment-videos`, {
@@ -412,10 +411,9 @@ const StudentView = () => {
 
   const sendTokenToServer = async (token) => {
     setTokenStatus('Sending token...');
-    const baseUrl =
-      'https://slimy-betsy-student-risk-ucf-cdl-test-1cfbb0a5.koyeb.app';
-    const userId = await fetchUserProfile();
+    const baseUrl = process.env.BACKEND_URL;
     const teacherCourses = await fetchTeacherCourses();
+    const userId = await fetchUserProfile();
 
     const data = {
       user_id: userId.toString(),
@@ -448,11 +446,13 @@ const StudentView = () => {
   };
 
   const testSendToken = async () => {
-    const storedToken = localStorage.getItem('apiToken');
-    if (storedToken) {
-      await sendTokenToServer(storedToken);
+    const baseUrl = process.env.BACKEND_URL;
+    const teacherCourses = await fetchTeacherCourses();
+    const userId = await fetchUserProfile();
+    if (teacherCourses.length > 0) {
+      await sendTokenToServer(teacherCourses[0]);
     } else {
-      setTokenStatus('No token stored. Please save a token first.');
+      setTokenStatus('No teacher courses found. Please add a teacher course first.');
     }
   };
 
