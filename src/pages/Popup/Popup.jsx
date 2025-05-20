@@ -86,24 +86,36 @@ const Popup = () => {
   return (
     <div className="container">
       {!userRole && (
-        <div className="token-input-container">
-          <input
-            type="text"
-            value={apiToken}
-            onChange={(e) => setApiToken(e.target.value)}
-            placeholder="Enter your Canvas API token"
-            className="token-input"
-          />
-          <button
-            onClick={() => {
-              localStorage.setItem('apiToken', apiToken);
-              window.location.reload();
-            }}
-            className="token-submit"
-          >
-            Submit Token
-          </button>
-        </div>
+        <>
+          <div className="token-input-container">
+            <input
+              type="text"
+              value={apiToken}
+              onChange={e => setApiToken(e.target.value)}
+              placeholder="Changing this to be sure!"
+              className="token-input"
+            />
+            <button
+              onClick={() => {
+                localStorage.setItem("apiToken", apiToken)
+                window.location.reload()
+              }}
+              className="token-submit"
+            >
+              Submit Token
+            </button>
+          </div>
+
+          {/* feedback button now inside the same conditional */}
+          <div className="mt-4 text-center">
+            <button
+              className="feedback-button px-4 py-2 rounded"
+              onClick={() => window.open(FEEDBACK_URL, "_blank")}
+            >
+              Give Feedback
+            </button>
+          </div>
+        </>
       )}
       {userRole === 'TeacherEnrollment' ? (
         <>
