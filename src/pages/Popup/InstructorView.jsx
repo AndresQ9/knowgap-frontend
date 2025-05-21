@@ -3,7 +3,7 @@ import './Popup.css';
 import youtube from '../Popup/imgs/youtube.png';
 
 // Add backend URL constant
-const BACKEND_URL = 'http://localhost:5000'; // Update this with your actual backend URL
+const BACKEND_URL = 'https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/api';
 
 const InstructorView = () => {
   const [activeTab, setActiveTab] = useState('assignments');
@@ -117,6 +117,8 @@ const InstructorView = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify({
           userid: userId.toString(),
@@ -124,6 +126,8 @@ const InstructorView = () => {
           courseids: teacherCourses,
           link: getCanvasBaseUrl(),
         }),
+        mode: 'cors',
+        credentials: 'include'
       });
 
       if (!response.ok) {
@@ -390,11 +394,14 @@ const InstructorView = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Accept: 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify({
           course_id: courseId,
         }),
+        mode: 'cors',
+        credentials: 'include'
       });
 
       if (!response.ok) {
@@ -425,11 +432,15 @@ const InstructorView = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify({
           quiz_id: quizId,
           question_id: questionId,
         }),
+        mode: 'cors',
+        credentials: 'include'
       });
 
       if (response.ok) {
@@ -471,12 +482,16 @@ const InstructorView = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify({
           quiz_id: selectedQuiz,
           question_id: newVideo.questionId,
           video_link: newVideo.url,
         }),
+        mode: 'cors',
+        credentials: 'include'
       });
 
       const data = await response.json();
@@ -518,11 +533,15 @@ const InstructorView = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify({
           courseid: courseId,
           course_context: courseContext,
         }),
+        mode: 'cors',
+        credentials: 'include'
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -549,12 +568,16 @@ const InstructorView = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify({
           quiz_id: question.quiz_id,
           question_id: editingVideo.questionId,
           new_link: editingVideo.newLink,
         }),
+        mode: 'cors',
+        credentials: 'include'
       });
 
       if (response.ok) {

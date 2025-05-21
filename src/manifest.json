@@ -12,7 +12,8 @@
     },
     "host_permissions": [
       "https://canvas.instructure.com/*",
-      "https://webcourses.ucf.edu/*"
+      "https://webcourses.ucf.edu/*",
+      "https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/*"
     ],
     "content_scripts": [
       {

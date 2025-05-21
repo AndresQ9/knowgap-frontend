@@ -93,16 +93,19 @@ const StudentView = () => {
   const fetchSupportVideos = async (riskLevel) => {
     try {
       const response = await fetch(
-        `${process.env.BACKEND_URL}/get-support-video`,
+        'https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/api/get-support-video',
         {
           method: 'POST',
           headers: {
-            Accept: 'application/json',
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Origin': 'chrome-extension://' + chrome.runtime.id
           },
           body: JSON.stringify({
             risk: riskLevel,
           }),
+          mode: 'cors',
+          credentials: 'include'
         }
       );
 
@@ -249,19 +252,20 @@ const StudentView = () => {
   };
 
   const fetchVideoRecommendations = async (userId, courseId) => {
-    const baseUrl = process.env.BACKEND_URL;
-
     try {
-      const response = await fetch(`${baseUrl}/get-assessment-videos`, {
+      const response = await fetch('https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/api/get-assessment-videos', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Accept: 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify({
           student_id: userId.toString(),
           course_id: courseId.toString(),
         }),
+        mode: 'cors',
+        credentials: 'include'
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -411,7 +415,6 @@ const StudentView = () => {
 
   const sendTokenToServer = async (token) => {
     setTokenStatus('Sending token...');
-    const baseUrl = process.env.BACKEND_URL;
     const teacherCourses = await fetchTeacherCourses();
     const userId = await fetchUserProfile();
 
@@ -424,12 +427,16 @@ const StudentView = () => {
     console.log('Sending token:', data);
 
     try {
-      const response = await fetch(`${baseUrl}/add-token`, {
+      const response = await fetch('https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/api/add-token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify(data),
+        mode: 'cors',
+        credentials: 'include'
       });
 
       if (!response.ok) {
