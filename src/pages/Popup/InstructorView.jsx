@@ -7,6 +7,10 @@ const InstructorView = () => {
   const [students, setStudents] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [courseQuestions, setCourseQuestions] = useState([]);
+  const [quizzes, setQuizzes] = useState([]);
+  const [selectedQuiz, setSelectedQuiz] = useState('');
+  const [quizQuestions, setQuizQuestions] = useState([]);
+  const [quizSearchTerm, setQuizSearchTerm] = useState('');
   const [newVideo, setNewVideo] = useState({
     title: '',
     url: '',
@@ -213,6 +217,68 @@ const InstructorView = () => {
     }
   };
 
+  const fetchQuizzes = async (courseId) => {
+    const baseUrl = getCanvasBaseUrl();
+    const storedToken = localStorage.getItem('apiToken');
+
+    if (!baseUrl || !storedToken) {
+      console.error('Missing base URL or API token');
+      return [];
+    }
+
+    const myHeaders = new Headers();
+    myHeaders.append('Authorization', `Bearer ${storedToken}`);
+
+    const requestOptions = {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+    };
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/v1/courses/${courseId}/quizzes`,
+        requestOptions
+      );
+      const quizzesData = await response.json();
+      return quizzesData;
+    } catch (error) {
+      console.error('Error fetching quizzes:', error);
+      return [];
+    }
+  };
+
+  const fetchQuizQuestions = async (courseId, quizId) => {
+    const baseUrl = getCanvasBaseUrl();
+    const storedToken = localStorage.getItem('apiToken');
+
+    if (!baseUrl || !storedToken) {
+      console.error('Missing base URL or API token');
+      return [];
+    }
+
+    const myHeaders = new Headers();
+    myHeaders.append('Authorization', `Bearer ${storedToken}`);
+
+    const requestOptions = {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+    };
+
+    try {
+      const response = await fetch(
+        `${baseUrl}/api/v1/courses/${courseId}/quizzes/${quizId}/questions`,
+        requestOptions
+      );
+      const questionsData = await response.json();
+      return questionsData;
+    } catch (error) {
+      console.error('Error fetching quiz questions:', error);
+      return [];
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const courseId = fetchCurrentCourseId();
@@ -236,11 +302,30 @@ const InstructorView = () => {
         );
         setStudents(studentData);
         fetchCourseVideos(courseId);
+        
+        // Fetch quizzes for the course
+        const quizzesData = await fetchQuizzes(courseId);
+        setQuizzes(quizzesData);
       }
     };
 
     fetchData();
   }, []);
+
+  // Effect to fetch questions when a quiz is selected
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      if (selectedQuiz) {
+        const courseId = fetchCurrentCourseId();
+        const questions = await fetchQuizQuestions(courseId, selectedQuiz);
+        setQuizQuestions(questions);
+      } else {
+        setQuizQuestions([]);
+      }
+    };
+
+    fetchQuestions();
+  }, [selectedQuiz]);
 
   const calculateAverageScore = (scores) => {
     const validScores = scores.filter((score) => score !== 'N/A');
@@ -367,29 +452,20 @@ const InstructorView = () => {
 
   const handleAddVideo = async () => {
     const baseUrl = process.env.BACKEND_URL;
-    if (!newVideo.title || !newVideo.url || !newVideo.questionId) {
+    if (!newVideo.title || !newVideo.url || !newVideo.questionId || !selectedQuiz) {
       console.log('Missing required fields');
       return;
     }
 
-    console.log('Selected question ID:', newVideo.questionId);
-
-    // Get the full question object from courseQuestions
-    const selectedQuestion = courseQuestions.find(
-      (q) => q.question_text === newVideo.questionId
+    // Get the selected question from quizQuestions
+    const selectedQuestion = quizQuestions.find(
+      (q) => q.id.toString() === newVideo.questionId
     );
 
     if (!selectedQuestion) {
       console.log('Could not find matching question');
       return;
     }
-
-    const quizId = selectedQuestion.quiz_id;
-    const questionId = selectedQuestion.question_id;
-
-    console.log('Quiz ID:', quizId);
-    console.log('Question ID:', questionId);
-    console.log('Video URL:', newVideo.url);
 
     try {
       const response = await fetch(`${baseUrl}/add-video`, {
@@ -398,8 +474,8 @@ const InstructorView = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          quiz_id: quizId,
-          question_id: questionId,
+          quiz_id: selectedQuiz,
+          question_id: newVideo.questionId,
           video_link: newVideo.url,
         }),
       });
@@ -409,10 +485,10 @@ const InstructorView = () => {
 
       if (response.ok) {
         const newVideoData = {
-          question_id: questionId,
-          quiz_id: quizId,
+          question_id: newVideo.questionId,
+          quiz_id: selectedQuiz,
           question_text: selectedQuestion.question_text,
-          core_topic: selectedQuestion.core_topic,
+          core_topic: selectedQuestion.question_text.substring(0, 50), // Using first 50 chars as core topic
           video_data: {
             title: newVideo.title || 'Custom Video',
             link: newVideo.url,
@@ -425,6 +501,8 @@ const InstructorView = () => {
 
         setCourseQuestions((prevQuestions) => [...prevQuestions, newVideoData]);
         setNewVideo({ title: '', url: '', questionId: '' });
+        setSelectedQuiz('');
+        setQuizQuestions([]);
         console.log('Video added successfully:', newVideoData);
       }
     } catch (error) {
@@ -904,35 +982,115 @@ const InstructorView = () => {
           )}
 
           <h4>Add New Video</h4>
-          <select
-            value={newVideo.questionId}
-            onChange={(e) =>
-              setNewVideo({ ...newVideo, questionId: e.target.value })
-            }
-          >
-            <option value="">Select a question</option>
-            {courseQuestions.map((question) => (
-              <option key={question.question_id} value={question.question_text}>
-                {question.question_text.substring(0, 50)}...
-              </option>
-            ))}
-          </select>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Search Quiz:</label>
+            <input
+              type="text"
+              placeholder="Search quizzes..."
+              value={quizSearchTerm}
+              onChange={(e) => setQuizSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                marginBottom: '0.5rem',
+                borderRadius: '0.25rem',
+                border: '1px solid #e2e8f0',
+              }}
+            />
+            <select
+              value={selectedQuiz}
+              onChange={(e) => setSelectedQuiz(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                marginBottom: '0.5rem',
+                borderRadius: '0.25rem',
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              <option value="">Select a quiz</option>
+              {quizzes
+                .filter(quiz => 
+                  quiz.title.toLowerCase().includes(quizSearchTerm.toLowerCase())
+                )
+                .map((quiz) => (
+                  <option key={quiz.id} value={quiz.id}>
+                    {quiz.title}
+                  </option>
+                ))}
+            </select>
+          </div>
 
-          <input
-            type="text"
-            placeholder="Video Title"
-            value={newVideo.title}
-            onChange={(e) =>
-              setNewVideo({ ...newVideo, title: e.target.value })
-            }
-          />
-          <input
-            type="text"
-            placeholder="Video URL"
-            value={newVideo.url}
-            onChange={(e) => setNewVideo({ ...newVideo, url: e.target.value })}
-          />
-          <button onClick={handleAddVideo}>Add Video</button>
+          {selectedQuiz && (
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Question:</label>
+              <select
+                value={newVideo.questionId}
+                onChange={(e) =>
+                  setNewVideo({ ...newVideo, questionId: e.target.value })
+                }
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  marginBottom: '0.5rem',
+                  borderRadius: '0.25rem',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <option value="">Select a question</option>
+                {quizQuestions.map((question) => (
+                  <option key={question.id} value={question.id}>
+                    {question.question_text.substring(0, 100)}...
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div style={{ marginBottom: '1rem' }}>
+            <input
+              type="text"
+              placeholder="Video Title"
+              value={newVideo.title}
+              onChange={(e) =>
+                setNewVideo({ ...newVideo, title: e.target.value })
+              }
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                marginBottom: '0.5rem',
+                borderRadius: '0.25rem',
+                border: '1px solid #e2e8f0',
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Video URL"
+              value={newVideo.url}
+              onChange={(e) => setNewVideo({ ...newVideo, url: e.target.value })}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                marginBottom: '0.5rem',
+                borderRadius: '0.25rem',
+                border: '1px solid #e2e8f0',
+              }}
+            />
+            <button 
+              onClick={handleAddVideo}
+              style={{
+                backgroundColor: '#4299e1',
+                color: '#fff',
+                padding: '0.5rem 1rem',
+                borderRadius: '0.25rem',
+                border: 'none',
+                cursor: 'pointer',
+                width: '100%',
+              }}
+            >
+              Add Video
+            </button>
+          </div>
         </div>
       </div>
 
