@@ -9,6 +9,7 @@ const Popup = () => {
   const [apiToken, setApiToken] = useState('');
   const [assignments, setAssignments] = useState([]);
   const [students, setStudents] = useState([]);
+  const [tokenStatus, setTokenStatus] = useState('');
 
   const getCanvasBaseUrl = () => {
     const url = window.location.href;
@@ -20,6 +21,36 @@ const Popup = () => {
     const url = window.location.href;
     const match = url.match(/\/courses\/(\d+)/);
     return match && match[1] ? match[1] : null;
+  };
+
+  const validateToken = async (token) => {
+    const baseUrl = getCanvasBaseUrl();
+    if (!baseUrl) {
+      setTokenStatus('Error: Unable to determine Canvas URL');
+      return false;
+    }
+
+    const myHeaders = new Headers();
+    myHeaders.append('Authorization', `Bearer ${token}`);
+
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/users/self`, {
+        method: 'GET',
+        headers: myHeaders,
+        redirect: 'follow',
+      });
+
+      if (!response.ok) {
+        throw new Error('Invalid token');
+      }
+
+      const data = await response.json();
+      setTokenStatus('Token validated successfully!');
+      return true;
+    } catch (error) {
+      setTokenStatus('Invalid token. Please check and try again.');
+      return false;
+    }
   };
 
   useEffect(() => {
@@ -81,6 +112,16 @@ const Popup = () => {
     setUserRole('');
     setAssignments([]);
     setStudents([]);
+    setTokenStatus('');
+  };
+
+  const handleTokenSubmit = async () => {
+    setTokenStatus('Validating token...');
+    const isValid = await validateToken(apiToken);
+    if (isValid) {
+      localStorage.setItem('apiToken', apiToken);
+      window.location.reload();
+    }
   };
 
   return (
@@ -89,28 +130,29 @@ const Popup = () => {
         <>
           <div className="token-input-container">
             <input
-              type="text"
+              type="password"
               value={apiToken}
               onChange={e => setApiToken(e.target.value)}
-              placeholder="Changing this to be sure!"
+              placeholder="Enter your Canvas API token"
               className="token-input"
             />
             <button
-              onClick={() => {
-                localStorage.setItem("apiToken", apiToken)
-                window.location.reload()
-              }}
+              onClick={handleTokenSubmit}
               className="token-submit"
             >
               Submit Token
             </button>
+            {tokenStatus && (
+              <p className={`token-status ${tokenStatus.includes('successfully') ? 'success' : 'error'}`}>
+                {tokenStatus}
+              </p>
+            )}
           </div>
 
-          {/* feedback button now inside the same conditional */}
           <div className="mt-4 text-center">
             <button
               className="feedback-button px-4 py-2 rounded"
-              onClick={() => window.open(FEEDBACK_URL, "_blank")}
+              onClick={() => window.open('https://forms.gle/your-feedback-form-url', "_blank")}
             >
               Give Feedback
             </button>
