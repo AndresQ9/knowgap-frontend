@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import './Popup.css';
-import youtube from '../Popup/imgs/youtube.png';
 import StudentView from './Studentview';
 import InstructorView from './InstructorView';
-const FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLSejLTcgwl2-JStfV-nAWQfJW1WfGRp4AnEDd5BuVf8MOvShXQ/viewform?usp=sharing&ouid=102318012117186033401"
+
+const FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLSejLTcgwl2-JStfV-nAWQfJW1WfGRp4AnEDd5BuVf8MOvShXQ/viewform?usp=sharing&ouid=102318012117186033401";
+const BACKEND_URL = process.env.BACKEND_URL;
+
 const Popup = () => {
   const [userRole, setUserRole] = useState('');
   const [apiToken, setApiToken] = useState('');
-  const [assignments, setAssignments] = useState([]);
-  const [students, setStudents] = useState([]);
+  const [isSyncingCourse, setIsSyncingCourse] = useState(false);
+  const [syncError, setSyncError] = useState(null);
   const [tokenStatus, setTokenStatus] = useState('');
 
   const getCanvasBaseUrl = () => {
@@ -53,6 +55,87 @@ const Popup = () => {
     }
   };
 
+  const loadCourse = async (courseId, accessToken, link) => {
+    try {
+      setIsSyncingCourse(true);
+      setSyncError(null);
+
+      // 1. Update course database
+      const dbResponse = await fetch(`${BACKEND_URL}/update-course-db`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
+        },
+        body: JSON.stringify({
+          course_id: courseId,
+          access_token: accessToken,
+          link: link
+        }),
+        mode: 'cors',
+        credentials: 'include'
+      });
+
+      const dbData = await dbResponse.json();
+      if (dbData.status === 'Error') {
+        throw new Error(dbData.message);
+      }
+
+      return {
+        status: 'success',
+        message: 'Course database updated successfully'
+      };
+    } catch (error) {
+      console.error('Error updating course database:', error);
+      setSyncError(error.message);
+      return {
+        status: 'error',
+        message: error.message
+      };
+    } finally {
+      setIsSyncingCourse(false);
+    }
+  };
+
+  const updateCourseContext = async (courseId, role) => {
+    try {
+      const contextResponse = await fetch(`${BACKEND_URL}/update-course-context`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
+        },
+        body: JSON.stringify({
+          course_id: courseId,
+          course_context: {
+            user_role: role
+          }
+        }),
+        mode: 'cors',
+        credentials: 'include'
+      });
+
+      const contextData = await contextResponse.json();
+      if (contextData.status === 'Error') {
+        throw new Error(contextData.message);
+      }
+
+      return {
+        status: 'success',
+        message: 'Course context updated successfully'
+      };
+    } catch (error) {
+      console.error('Error updating course context:', error);
+      setSyncError(error.message);
+      return {
+        status: 'error',
+        message: error.message
+      };
+    }
+  };
+
   useEffect(() => {
     const fetchUserRole = async () => {
       const baseUrl = getCanvasBaseUrl();
@@ -64,32 +147,32 @@ const Popup = () => {
         return;
       }
 
-      const myHeaders = new Headers();
-      myHeaders.append('Authorization', `Bearer ${storedToken}`);
+      // First update the course database
+      const dbResult = await loadCourse(courseId, storedToken, baseUrl);
+      if (dbResult.status === 'success') {
+        const myHeaders = new Headers();
+        myHeaders.append('Authorization', `Bearer ${storedToken}`);
 
-      const requestOptions = {
-        method: 'GET',
-        headers: myHeaders,
-        redirect: 'follow',
-      };
+        const requestOptions = {
+          method: 'GET',
+          headers: myHeaders,
+          redirect: 'follow',
+        };
 
-      try {
-        const response = await fetch(
-          `${baseUrl}/api/v1/courses/${courseId}/enrollments?user_id=self`,
-          requestOptions
-        );
-        const enrollmentData = await response.json();
-        const role = enrollmentData[0].type;
-        console.log('User role:', role);
-        setUserRole(role);
+        try {
+          const response = await fetch(
+            `${baseUrl}/api/v1/courses/${courseId}/enrollments?user_id=self`,
+            requestOptions
+          );
+          const enrollmentData = await response.json();
+          const role = enrollmentData[0].type;
+          setUserRole(role);
 
-        if (role === 'StudentEnrollment') {
-          fetchAssignments(baseUrl, courseId, storedToken);
-        } else if (role === 'TeacherEnrollment') {
-          fetchStudents(baseUrl, courseId, storedToken);
+          // Then update the course context with the role
+          await updateCourseContext(courseId, role);
+        } catch (error) {
+          console.error('Error fetching user role:', error);
         }
-      } catch (error) {
-        console.error('Error fetching user role:', error);
       }
     };
 
@@ -98,35 +181,55 @@ const Popup = () => {
     }
   }, []);
 
-  const fetchAssignments = async (baseUrl, courseId, token) => {
-    // Implement assignment fetching logic here
-  };
-
-  const fetchStudents = async (baseUrl, courseId, token) => {
-    // Implement student fetching logic here
-  };
+  useEffect(() => {
+    const storedToken = localStorage.getItem('apiToken');
+    console.log('Stored token:', storedToken ? 'exists' : 'not found');
+    if (storedToken) {
+      setApiToken(storedToken);
+    }
+  }, []);
 
   const removeToken = () => {
     localStorage.removeItem('apiToken');
     setApiToken('');
     setUserRole('');
-    setAssignments([]);
-    setStudents([]);
-    setTokenStatus('');
   };
 
   const handleTokenSubmit = async () => {
+    if (!apiToken.trim()) {
+      setTokenStatus('Please enter a token');
+      return;
+    }
+
     setTokenStatus('Validating token...');
     const isValid = await validateToken(apiToken);
+    
     if (isValid) {
       localStorage.setItem('apiToken', apiToken);
-      window.location.reload();
+      setTokenStatus('Token saved successfully!');
+      // Wait a moment before reloading to show success message
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }
+  };
+
+  const handleRefreshCourse = async () => {
+    const courseId = fetchCurrentCourseId();
+    const storedToken = localStorage.getItem('apiToken');
+    const baseUrl = getCanvasBaseUrl();
+
+    if (courseId && storedToken && baseUrl) {
+      const result = await loadCourse(courseId, storedToken, baseUrl);
+      if (result.status === 'success') {
+        window.location.reload(); // Reload to refresh all data
+      }
     }
   };
 
   return (
     <div className="container">
-      {!userRole && (
+      {!localStorage.getItem('apiToken') && !userRole ? (
         <>
           <div className="token-input-container">
             <input
@@ -152,29 +255,42 @@ const Popup = () => {
           <div className="mt-4 text-center">
             <button
               className="feedback-button px-4 py-2 rounded"
-              onClick={() => window.open('https://forms.gle/your-feedback-form-url', "_blank")}
+              onClick={() => window.open(FEEDBACK_URL, "_blank")}
             >
               Give Feedback
             </button>
           </div>
         </>
-      )}
-      {userRole === 'TeacherEnrollment' ? (
-        <>
-          <InstructorView students={students} />
-          <button onClick={removeToken} className="token-remove">
-            Remove Token
-          </button>
-        </>
-      ) : userRole === 'StudentEnrollment' ? (
-        <>
-          <StudentView assignments={assignments} />
-          <button onClick={removeToken} className="token-remove">
-            Remove Token
-          </button>
-        </>
       ) : (
-        <p>Please enter your API token to view your data.</p>
+        <>
+          {isSyncingCourse && (
+            <div className="sync-status">
+              Syncing course data...
+            </div>
+          )}
+          {syncError && (
+            <div className="error-message">
+              Error: {syncError}
+            </div>
+          )}
+          {userRole === 'TeacherEnrollment' ? (
+            <>
+              <InstructorView />
+              <button onClick={removeToken} className="token-remove">
+                Remove Token
+              </button>
+            </>
+          ) : userRole === 'StudentEnrollment' ? (
+            <>
+              <StudentView />
+              <button onClick={removeToken} className="token-remove">
+                Remove Token
+              </button>
+            </>
+          ) : (
+            <p>Please enter your API token to view your data.</p>
+          )}
+        </>
       )}
     </div>
   );

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import './Studentview.css';
 import youtube from './imgs/youtube.png';
 
+const BACKEND_URL = process.env.BACKEND_URL;
+
 const calculateSlope = (assignments) => {
   const lastFiveAssignments = assignments
     .filter(
@@ -67,11 +69,13 @@ const StudentView = () => {
   const [assignments, setAssignments] = useState([]);
   const [recommendedVideos, setRecommendedVideos] = useState([]);
   const [supportVideo, setSupportVideo] = useState(null);
-  const [courseId, setCourseId] = useState('');
-  const [apiToken, setApiToken] = useState('');
   const [classGrade, setClassGrade] = useState('N/A');
   const [studentName, setStudentName] = useState('');
+  const [isSyncingCourse, setIsSyncingCourse] = useState(false);
+  const [syncError, setSyncError] = useState(null);
+  const [apiToken, setApiToken] = useState('');
   const [tokenStatus, setTokenStatus] = useState('');
+  const [hasToken, setHasToken] = useState(false);
 
   const imgs = { youtube };
 
@@ -92,31 +96,29 @@ const StudentView = () => {
 
   const fetchSupportVideos = async (riskLevel) => {
     try {
-      const response = await fetch(
-        'https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/api/get-support-video',
-        {
+      const response = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: 'API_REQUEST',
+          url: `${BACKEND_URL}/get-support-video`,
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Origin': 'chrome-extension://' + chrome.runtime.id
-          },
-          body: JSON.stringify({
-            risk: riskLevel,
-          }),
-          mode: 'cors',
-          credentials: 'include'
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data;
+          body: {
+            risk_level: riskLevel,
+          }
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (!response) {
+            reject(new Error('No response received from background script'));
+          } else if (!response.success) {
+            reject(new Error(response.error || 'Unknown error occurred'));
+          } else {
+            resolve(response.data);
+          }
+        });
+      });
+      return response;
     } catch (error) {
-      console.error('Error fetching support video:', error);
+      console.error('Error fetching support videos:', error);
       return null;
     }
   };
@@ -253,28 +255,28 @@ const StudentView = () => {
 
   const fetchVideoRecommendations = async (userId, courseId) => {
     try {
-      const response = await fetch('https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/api/get-assessment-videos', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Origin': 'chrome-extension://' + chrome.runtime.id
-        },
-        body: JSON.stringify({
-          student_id: userId.toString(),
-          course_id: courseId.toString(),
-        }),
-        mode: 'cors',
-        credentials: 'include'
+      const response = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+          type: 'API_REQUEST',
+          url: `${BACKEND_URL}/get-assessment-videos`,
+          method: 'POST',
+          body: {
+            user_id: userId,
+            course_id: courseId,
+          }
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (!response) {
+            reject(new Error('No response received from background script'));
+          } else if (!response.success) {
+            reject(new Error(response.error || 'Unknown error occurred'));
+          } else {
+            resolve(response.data);
+          }
+        });
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      console.log('Fetched video recommendations:', data);
-      console.log('fetching user id', userId);
-
-      return data;
+      return response;
     } catch (error) {
       console.error('Error fetching video recommendations:', error);
       return null;
@@ -307,43 +309,130 @@ const StudentView = () => {
     return formattedVideos;
   };
 
+  const loadCourse = async (courseId, accessToken, link) => {
+    try {
+      setIsSyncingCourse(true);
+      setSyncError(null);
+
+      // 1. Update course database
+      const dbResponse = await fetch(`${BACKEND_URL}/update-course-db`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
+        },
+        body: JSON.stringify({
+          course_id: courseId,
+          access_token: accessToken,
+          link: link
+        }),
+        mode: 'cors',
+        credentials: 'include'
+      });
+
+      const dbData = await dbResponse.json();
+      if (dbData.status === 'Error') {
+        throw new Error(dbData.message);
+      }
+
+      return {
+        status: 'success',
+        message: 'Course database updated successfully'
+      };
+    } catch (error) {
+      console.error('Error updating course database:', error);
+      setSyncError(error.message);
+      return {
+        status: 'error',
+        message: error.message
+      };
+    } finally {
+      setIsSyncingCourse(false);
+    }
+  };
+
+  const updateCourseContext = async (courseId, assignments, grade, name) => {
+    try {
+      const contextResponse = await fetch(`${BACKEND_URL}/update-course-context`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
+        },
+        body: JSON.stringify({
+          course_id: courseId,
+          course_context: {
+            assignments: assignments,
+            class_grade: grade,
+            student_name: name
+          }
+        }),
+        mode: 'cors',
+        credentials: 'include'
+      });
+
+      const contextData = await contextResponse.json();
+      if (contextData.status === 'Error') {
+        throw new Error(contextData.message);
+      }
+
+      return {
+        status: 'success',
+        message: 'Course context updated successfully'
+      };
+    } catch (error) {
+      console.error('Error updating course context:', error);
+      setSyncError(error.message);
+      return {
+        status: 'error',
+        message: error.message
+      };
+    }
+  };
+
   useEffect(() => {
     const updateCourseAndData = async () => {
-      const currentCourseId = fetchCurrentCourseId();
-      if (currentCourseId && currentCourseId !== courseId) {
-        setCourseId(currentCourseId);
-        fetchAssignments(currentCourseId);
-        const overallGrade = await fetchEnrollment(currentCourseId);
-        setClassGrade(overallGrade);
-        const userId = await fetchUserProfile();
+      const courseId = fetchCurrentCourseId();
+      const storedToken = localStorage.getItem('apiToken');
+      const baseUrl = getCanvasBaseUrl();
 
-        const stringUserId = userId.toString();
-        const stringCurrentCourseId = currentCourseId.toString();
+      if (courseId && storedToken && baseUrl) {
+        // First update the course database
+        const dbResult = await loadCourse(courseId, storedToken, baseUrl);
+        if (dbResult.status === 'success') {
+          // Then fetch all the required data
+          await fetchAssignments(courseId);
+          const enrollment = await fetchEnrollment(courseId);
+          if (enrollment) {
+            setStudentName(enrollment.user.name);
+          }
+          const userId = await fetchUserProfile();
+          if (userId) {
+            const recommendations = await fetchVideoRecommendations(userId, courseId);
+            if (recommendations) {
+              setRecommendedVideos(formatVideoRecommendations(recommendations));
+            }
+          }
 
-        const videoRecommendations = await fetchVideoRecommendations(
-          stringUserId,
-          stringCurrentCourseId
-        );
-        if (videoRecommendations) {
-          const formattedVideos =
-            formatVideoRecommendations(videoRecommendations);
-          console.log('Formatted Videos:', formattedVideos);
-          setRecommendedVideos(formattedVideos);
+          // Finally update the course context with all the data
+          await updateCourseContext(courseId, assignments, classGrade, studentName);
         }
-
-        // Fetch support video based on risk level
-        const { riskLevel } = calculateRisk();
-        const supportVideoData = await fetchSupportVideos(
-          normalizeRiskLevel(riskLevel)
-        );
-        setSupportVideo(supportVideoData);
       }
     };
 
     updateCourseAndData();
-    const intervalId = setInterval(updateCourseAndData, 5000);
-    return () => clearInterval(intervalId);
-  }, [courseId]);
+  }, []);
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem('apiToken');
+    console.log('StudentView - Stored token:', storedToken ? 'exists' : 'not found');
+    if (storedToken) {
+      setApiToken(storedToken);
+      setHasToken(true);
+    }
+  }, []);
 
   const calculateRisk = () => {
     const slope = calculateSlope(assignments);
@@ -375,66 +464,24 @@ const StudentView = () => {
 
   const removeToken = () => {
     localStorage.removeItem('apiToken');
-    setApiToken('');
     setAssignments([]);
     setClassGrade('N/A');
     setSupportVideo(null);
-    setTokenStatus('');
-  };
-
-  const fetchTeacherCourses = async () => {
-    const baseUrl = getCanvasBaseUrl();
-    const storedToken = localStorage.getItem('apiToken');
-
-    if (!baseUrl || !storedToken) {
-      console.error('Missing base URL or API token');
-      return [];
-    }
-
-    const myHeaders = new Headers();
-    myHeaders.append('Authorization', `Bearer ${storedToken}`);
-
-    const requestOptions = {
-      method: 'GET',
-      headers: myHeaders,
-      redirect: 'follow',
-    };
-
-    try {
-      const response = await fetch(
-        `${baseUrl}/api/v1/courses?enrollment_type=teacher&per_page=100`,
-        requestOptions
-      );
-      const coursesData = await response.json();
-      return coursesData.map((course) => course.id);
-    } catch (error) {
-      console.error('Error fetching teacher courses:', error);
-      return [];
-    }
   };
 
   const sendTokenToServer = async (token) => {
-    setTokenStatus('Sending token...');
-    const teacherCourses = await fetchTeacherCourses();
-    const userId = await fetchUserProfile();
-
-    const data = {
-      user_id: userId.toString(),
-      access_token: token.toString(),
-      course_ids: teacherCourses.length > 0 ? teacherCourses : [],
-      link: getCanvasBaseUrl(),
-    };
-    console.log('Sending token:', data);
-
     try {
-      const response = await fetch('https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/api/add-token', {
+      const response = await fetch(`${BACKEND_URL}/add-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Origin': 'chrome-extension://' + chrome.runtime.id
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          access_token: token,
+          link: getCanvasBaseUrl(),
+        }),
         mode: 'cors',
         credentials: 'include'
       });
@@ -443,23 +490,9 @@ const StudentView = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
-      setTokenStatus('Token set successfully!');
       localStorage.setItem('apiToken', token);
     } catch (error) {
       console.error('Error sending token:', error);
-      setTokenStatus('Error setting token. Please try again.');
-    }
-  };
-
-  const testSendToken = async () => {
-    const baseUrl = process.env.BACKEND_URL;
-    const teacherCourses = await fetchTeacherCourses();
-    const userId = await fetchUserProfile();
-    if (teacherCourses.length > 0) {
-      await sendTokenToServer(teacherCourses[0]);
-    } else {
-      setTokenStatus('No teacher courses found. Please add a teacher course first.');
     }
   };
 
@@ -473,10 +506,59 @@ const StudentView = () => {
 
   const { riskLevel } = calculateRisk();
 
+  const validateToken = async (token) => {
+    const baseUrl = getCanvasBaseUrl();
+    if (!baseUrl) {
+      setTokenStatus('Error: Unable to determine Canvas URL');
+      return false;
+    }
+
+    const myHeaders = new Headers();
+    myHeaders.append('Authorization', `Bearer ${token}`);
+
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/users/self`, {
+        method: 'GET',
+        headers: myHeaders,
+        redirect: 'follow',
+      });
+
+      if (!response.ok) {
+        throw new Error('Invalid token');
+      }
+
+      const data = await response.json();
+      setTokenStatus('Token validated successfully!');
+      return true;
+    } catch (error) {
+      setTokenStatus('Invalid token. Please check and try again.');
+      return false;
+    }
+  };
+
+  const handleTokenSubmit = async () => {
+    if (!apiToken.trim()) {
+      setTokenStatus('Please enter a token');
+      return;
+    }
+
+    setTokenStatus('Validating token...');
+    const isValid = await validateToken(apiToken);
+    
+    if (isValid) {
+      localStorage.setItem('apiToken', apiToken);
+      setTokenStatus('Token saved successfully!');
+      // Wait a moment before reloading to show success message
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }
+  };
+
   return (
     <body className="student-view">
       <div className="container">
-        {!localStorage.getItem('apiToken') ? (
+        {!hasToken && !localStorage.getItem('apiToken') ? (
           <div className="api-token-input">
             <h3>Enter Your Canvas API Token</h3>
             <p className="token-instructions">
@@ -495,16 +577,27 @@ const StudentView = () => {
               value={apiToken}
               onChange={(e) => setApiToken(e.target.value)}
             />
-            <button onClick={() => sendTokenToServer(apiToken)}>
+            <button onClick={handleTokenSubmit}>
               Save Token
             </button>
-            {tokenStatus && <p>{tokenStatus}</p>}
+            {tokenStatus && (
+              <p className={`token-status ${tokenStatus.includes('successfully') ? 'success' : 'error'}`}>
+                {tokenStatus}
+              </p>
+            )}
           </div>
         ) : (
           <div>
-            <div className="api-token-input">
-              <p></p>
-            </div>
+            {isSyncingCourse && (
+              <div className="sync-status">
+                Syncing course data...
+              </div>
+            )}
+            {syncError && (
+              <div className="error-message">
+                Error: {syncError}
+              </div>
+            )}
             <div className="performance-overview fade-in">
               <h2 className="overview-title">Your Performance Overview</h2>
               <h3>{studentName}</h3>

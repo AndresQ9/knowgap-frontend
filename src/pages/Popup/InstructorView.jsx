@@ -3,7 +3,7 @@ import './Popup.css';
 import youtube from '../Popup/imgs/youtube.png';
 
 // Add backend URL constant
-const BACKEND_URL = 'https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/api';
+const BACKEND_URL = process.env.BACKEND_URL;
 
 const InstructorView = () => {
   const [activeTab, setActiveTab] = useState('assignments');
@@ -13,7 +13,9 @@ const InstructorView = () => {
   const [quizzes, setQuizzes] = useState([]);
   const [selectedQuiz, setSelectedQuiz] = useState('');
   const [quizQuestions, setQuizQuestions] = useState([]);
-  const [quizSearchTerm, setQuizSearchTerm] = useState('');
+  const [isLoadingQuizzes, setIsLoadingQuizzes] = useState(true);
+  const [isSyncingCourse, setIsSyncingCourse] = useState(false);
+  const [syncError, setSyncError] = useState(null);
   const [newVideo, setNewVideo] = useState({
     title: '',
     url: '',
@@ -227,6 +229,10 @@ const InstructorView = () => {
     const baseUrl = getCanvasBaseUrl();
     const storedToken = localStorage.getItem('apiToken');
 
+    console.log('Fetching quizzes for course:', courseId);
+    console.log('Base URL:', baseUrl);
+    console.log('Has API token:', !!storedToken);
+
     if (!baseUrl || !storedToken) {
       console.error('Missing base URL or API token');
       return [];
@@ -242,12 +248,27 @@ const InstructorView = () => {
     };
 
     try {
-      const response = await fetch(
-        `${baseUrl}/api/v1/courses/${courseId}/quizzes`,
-        requestOptions
-      );
-      const quizzesData = await response.json();
-      return quizzesData;
+      let allQuizzes = [];
+      let nextUrl = `${baseUrl}/api/v1/courses/${courseId}/quizzes?per_page=100`;
+
+      while (nextUrl) {
+        console.log('Fetching quizzes from:', nextUrl);
+        const response = await fetch(nextUrl, requestOptions);
+        const quizzesData = await response.json();
+        allQuizzes = [...allQuizzes, ...quizzesData];
+
+        // Get the next page URL from the Link header
+        const linkHeader = response.headers.get('Link');
+        if (linkHeader) {
+          const nextMatch = linkHeader.match(/<([^>]+)>; rel="next"/);
+          nextUrl = nextMatch ? nextMatch[1] : null;
+        } else {
+          nextUrl = null;
+        }
+      }
+
+      console.log('Total quizzes received:', allQuizzes.length);
+      return allQuizzes;
     } catch (error) {
       console.error('Error fetching quizzes:', error);
       return [];
@@ -285,10 +306,84 @@ const InstructorView = () => {
     }
   };
 
+  const loadCourse = async (courseId, accessToken, link, courseContext) => {
+    try {
+      setIsSyncingCourse(true);
+      setSyncError(null);
+
+      // 1. Update course database
+      const dbResponse = await fetch(`${BACKEND_URL}/update-course-db`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
+        },
+        body: JSON.stringify({
+          course_id: courseId,
+          access_token: accessToken,
+          link: link
+        }),
+        mode: 'cors',
+        credentials: 'include'
+      });
+
+      if (!dbResponse.ok) {
+        throw new Error('Failed to update course database');
+      }
+
+      // 2. Update course context
+      const contextResponse = await fetch(`${BACKEND_URL}/update-course-context`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'chrome-extension://' + chrome.runtime.id
+        },
+        body: JSON.stringify({
+          course_id: courseId,
+          course_context: courseContext
+        }),
+        mode: 'cors',
+        credentials: 'include'
+      });
+
+      if (!contextResponse.ok) {
+        throw new Error('Failed to update course context');
+      }
+
+      return {
+        status: 'success',
+        message: 'Course data synchronized successfully'
+      };
+    } catch (error) {
+      console.error('Error synchronizing course data:', error);
+      setSyncError(error.message);
+      return {
+        status: 'error',
+        message: error.message
+      };
+    } finally {
+      setIsSyncingCourse(false);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const courseId = fetchCurrentCourseId();
       if (courseId) {
+        setIsLoadingQuizzes(true);
+        const storedToken = localStorage.getItem('apiToken');
+        const baseUrl = getCanvasBaseUrl();
+
+        // Synchronize course data
+        await loadCourse(
+          courseId,
+          storedToken,
+          baseUrl,
+          courseContext
+        );
+
         const enrollments = await fetchEnrollments(courseId);
         const studentData = await Promise.all(
           enrollments.map(async (enrollment) => {
@@ -312,6 +407,7 @@ const InstructorView = () => {
         // Fetch quizzes for the course
         const quizzesData = await fetchQuizzes(courseId);
         setQuizzes(quizzesData);
+        setIsLoadingQuizzes(false);
       }
     };
 
@@ -389,30 +485,38 @@ const InstructorView = () => {
   };
 
   const fetchCourseVideos = async (courseId) => {
+    const fullUrl = `${BACKEND_URL}/get-course-videos`;
+    
     try {
-      const response = await fetch(`${BACKEND_URL}/get-course-videos`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Origin': 'chrome-extension://' + chrome.runtime.id
-        },
-        body: JSON.stringify({
-          course_id: courseId,
-        }),
-        mode: 'cors',
-        credentials: 'include'
+      const response = await new Promise((resolve, reject) => {
+        if (!chrome.runtime) {
+          reject(new Error('chrome.runtime is not available'));
+          return;
+        }
+
+        chrome.runtime.sendMessage({
+          type: 'API_REQUEST',
+          url: fullUrl,
+          method: 'POST',
+          body: {
+            course_id: courseId,
+          }
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (!response) {
+            reject(new Error('No response received from background script'));
+          } else if (!response.success) {
+            reject(new Error(response.error || 'Unknown error occurred'));
+          } else {
+            resolve(response.data);
+          }
+        });
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Received data:', data);
-      setCourseQuestions(data.course_videos || []);
+      setCourseQuestions(response.course_videos || []);
     } catch (error) {
-      console.error('Error fetching course videos:', error);
+      setCourseQuestions([]); // Set empty array on error
     }
   };
 
@@ -588,6 +692,29 @@ const InstructorView = () => {
       }
     } catch (error) {
       setNotifications([...notifications, 'Failed to update video link']);
+    }
+  };
+
+  // Add a helper function to clean HTML from text
+  const cleanHtml = (html) => {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    return tempDiv.textContent || tempDiv.innerText || '';
+  };
+
+  // Add a manual refresh function
+  const handleRefreshCourse = async () => {
+    const courseId = fetchCurrentCourseId();
+    const storedToken = localStorage.getItem('apiToken');
+    const baseUrl = getCanvasBaseUrl();
+
+    if (courseId && storedToken && baseUrl) {
+      await loadCourse(
+        courseId,
+        storedToken,
+        baseUrl,
+        courseContext
+      );
     }
   };
 
@@ -1003,42 +1130,37 @@ const InstructorView = () => {
 
           <h4>Add New Video</h4>
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Search Quiz:</label>
-            <input
-              type="text"
-              placeholder="Search quizzes..."
-              value={quizSearchTerm}
-              onChange={(e) => setQuizSearchTerm(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                marginBottom: '0.5rem',
-                borderRadius: '0.25rem',
-                border: '1px solid #e2e8f0',
-              }}
-            />
-            <select
-              value={selectedQuiz}
-              onChange={(e) => setSelectedQuiz(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                marginBottom: '0.5rem',
-                borderRadius: '0.25rem',
-                border: '1px solid #e2e8f0',
-              }}
-            >
-              <option value="">Select a quiz</option>
-              {quizzes
-                .filter(quiz => 
-                  quiz.title.toLowerCase().includes(quizSearchTerm.toLowerCase())
-                )
-                .map((quiz) => (
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Quiz:</label>
+            {isLoadingQuizzes ? (
+              <div style={{ 
+                padding: '1rem', 
+                textAlign: 'center',
+                backgroundColor: '#f7fafc',
+                borderRadius: '0.375rem',
+                marginBottom: '0.5rem'
+              }}>
+                Loading quizzes...
+              </div>
+            ) : (
+              <select
+                value={selectedQuiz}
+                onChange={(e) => setSelectedQuiz(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  marginBottom: '0.5rem',
+                  borderRadius: '0.25rem',
+                  border: '1px solid #e2e8f0',
+                }}
+              >
+                <option value="">Select a quiz</option>
+                {quizzes.map((quiz) => (
                   <option key={quiz.id} value={quiz.id}>
                     {quiz.title}
                   </option>
                 ))}
-            </select>
+              </select>
+            )}
           </div>
 
           {selectedQuiz && (
@@ -1060,7 +1182,7 @@ const InstructorView = () => {
                 <option value="">Select a question</option>
                 {quizQuestions.map((question) => (
                   <option key={question.id} value={question.id}>
-                    {question.question_text.substring(0, 100)}...
+                    {cleanHtml(question.question_text).substring(0, 100)}...
                   </option>
                 ))}
               </select>
@@ -1117,6 +1239,31 @@ const InstructorView = () => {
       <div style={styles.container}>
         <div>
           <h2 style={styles.title}>Course Context</h2>
+          <div style={{ marginBottom: '1rem' }}>
+            <button
+              style={{
+                ...styles.messageButton,
+                marginBottom: '1rem',
+                backgroundColor: isSyncingCourse ? '#a0aec0' : '#3182ce',
+                cursor: isSyncingCourse ? 'not-allowed' : 'pointer'
+              }}
+              onClick={handleRefreshCourse}
+              disabled={isSyncingCourse}
+            >
+              {isSyncingCourse ? 'Syncing Course...' : 'Refresh Course Data'}
+            </button>
+            {syncError && (
+              <div style={{ 
+                color: '#e53e3e', 
+                marginBottom: '1rem',
+                padding: '0.5rem',
+                backgroundColor: '#fff5f5',
+                borderRadius: '0.375rem'
+              }}>
+                Error: {syncError}
+              </div>
+            )}
+          </div>
           <textarea
             style={styles.textArea}
             value={courseContext}
