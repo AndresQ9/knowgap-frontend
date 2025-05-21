@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import './Popup.css';
 import youtube from '../Popup/imgs/youtube.png';
 
+// Add backend URL constant
+const BACKEND_URL = 'http://localhost:5000'; // Update this with your actual backend URL
+
 const InstructorView = () => {
   const [activeTab, setActiveTab] = useState('assignments');
   const [students, setStudents] = useState([]);
@@ -106,12 +109,11 @@ const InstructorView = () => {
 
   const sendTokenToServer = async (token) => {
     setTokenStatus('Sending token...');
-    const baseUrl = process.env.BACKEND_URL;
     const teacherCourses = await fetchTeacherCourses();
     const userId = await fetchUserProfile();
 
     try {
-      const response = await fetch(`${baseUrl}/add-token`, {
+      const response = await fetch(`${BACKEND_URL}/add-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -383,9 +385,8 @@ const InstructorView = () => {
   };
 
   const fetchCourseVideos = async (courseId) => {
-    const baseUrl = process.env.BACKEND_URL;
     try {
-      const response = await fetch(`${baseUrl}/get-course-videos`, {
+      const response = await fetch(`${BACKEND_URL}/get-course-videos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -419,9 +420,8 @@ const InstructorView = () => {
   };
 
   const removeVideoFromQuestion = async (questionId, quizId) => {
-    const baseUrl = process.env.BACKEND_URL;
     try {
-      const response = await fetch(`${baseUrl}/remove-video`, {
+      const response = await fetch(`${BACKEND_URL}/remove-video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -451,7 +451,6 @@ const InstructorView = () => {
   };
 
   const handleAddVideo = async () => {
-    const baseUrl = process.env.BACKEND_URL;
     if (!newVideo.title || !newVideo.url || !newVideo.questionId || !selectedQuiz) {
       console.log('Missing required fields');
       return;
@@ -468,7 +467,7 @@ const InstructorView = () => {
     }
 
     try {
-      const response = await fetch(`${baseUrl}/add-video`, {
+      const response = await fetch(`${BACKEND_URL}/add-video`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -511,12 +510,11 @@ const InstructorView = () => {
   };
 
   const updateCourseContext = async () => {
-    const baseUrl = process.env.BACKEND_URL;
     const courseId = fetchCurrentCourseId();
     if (!courseId) return;
 
     try {
-      const response = await fetch(`${baseUrl}/update-course-context`, {
+      const response = await fetch(`${BACKEND_URL}/update-course-context`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -540,7 +538,6 @@ const InstructorView = () => {
   };
 
   const handleSaveEdit = async () => {
-    const baseUrl = process.env.BACKEND_URL;
     if (!editingVideo) return;
 
     const question = courseQuestions.find(
@@ -548,7 +545,7 @@ const InstructorView = () => {
     );
 
     try {
-      const response = await fetch(`${baseUrl}/update-video-link`, {
+      const response = await fetch(`${BACKEND_URL}/update-video-link`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
