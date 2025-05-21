@@ -10,6 +10,11 @@
     "background": {
       "service_worker": "background.bundle.js"
     },
+    "permissions": [
+      "https://canvas.instructure.com/*",
+      "https://webcourses.ucf.edu/*",
+      "https://gen-ai-prime-3ddeabb35bd7.herokuapp.com/*"
+    ],
     "host_permissions": [
       "https://canvas.instructure.com/*",
       "https://webcourses.ucf.edu/*",
