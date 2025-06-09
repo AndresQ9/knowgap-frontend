@@ -203,7 +203,7 @@ const Popup = () => {
 
     setTokenStatus('Validating token...');
     const isValid = await validateToken(apiToken);
-    
+
     if (isValid) {
       localStorage.setItem('apiToken', apiToken);
       setTokenStatus('Token saved successfully!');
@@ -276,9 +276,6 @@ const Popup = () => {
           {userRole === 'TeacherEnrollment' ? (
             <>
               <InstructorView />
-              <button onClick={removeToken} className="token-remove">
-                Remove Token
-              </button>
             </>
           ) : userRole === 'StudentEnrollment' ? (
             <>
@@ -288,9 +285,14 @@ const Popup = () => {
               </button>
             </>
           ) : (
-            <p>Please enter your API token to view your data.</p>
+            <p>Navigate to a course to view your data.</p>
           )}
         </>
+      )}
+      {localStorage.getItem('apiToken') && !userRole && (
+        <button onClick={removeToken} className="token-remove">
+          Remove Token
+        </button>
       )}
     </div>
   );

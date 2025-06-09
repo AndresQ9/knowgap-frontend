@@ -467,6 +467,8 @@ const StudentView = () => {
     setAssignments([]);
     setClassGrade('N/A');
     setSupportVideo(null);
+    setHasToken(false);
+    setApiToken('');
   };
 
   const sendTokenToServer = async (token) => {
@@ -544,7 +546,7 @@ const StudentView = () => {
 
     setTokenStatus('Validating token...');
     const isValid = await validateToken(apiToken);
-    
+
     if (isValid) {
       localStorage.setItem('apiToken', apiToken);
       setTokenStatus('Token saved successfully!');
@@ -622,15 +624,17 @@ const StudentView = () => {
                 </div>
               </div>
             </div>
+            <button onClick={removeToken} className="token-remove">
+              Remove Token
+            </button>
           </div>
         )}
       </div>
 
       <div className="tab-container">
         <button
-          className={`tab-button ${
-            activeTab === 'assignments' ? 'active' : ''
-          }`}
+          className={`tab-button ${activeTab === 'assignments' ? 'active' : ''
+            }`}
           onClick={() => setActiveTab('assignments')}
         >
           Assignments
@@ -663,18 +667,17 @@ const StudentView = () => {
                   <div>
                     <h3 className="item-title">{assignment.name}</h3>
                     <p
-                      className={`item-score ${
-                        assignment.score === 'N/A' ||
+                      className={`item-score ${assignment.score === 'N/A' ||
                         assignment.score === 'Error'
-                          ? ''
-                          : Number(assignment.score) <
-                            assignment.pointsPossible * 0.7
+                        ? ''
+                        : Number(assignment.score) <
+                          assignment.pointsPossible * 0.7
                           ? 'score-bad'
                           : 'score-good'
-                      }`}
+                        }`}
                     >
                       {assignment.score === 'N/A' ||
-                      assignment.score === 'Error'
+                        assignment.score === 'Error'
                         ? assignment.score
                         : `${assignment.score}/${assignment.pointsPossible}`}
                     </p>

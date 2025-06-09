@@ -940,6 +940,11 @@ const InstructorView = () => {
   return (
     <body style={styles.body}>
       <div style={styles.container}>
+        {localStorage.getItem('apiToken') && (
+          <button onClick={removeToken} className="token-remove">
+            Remove Token
+          </button>
+        )}
         {localStorage.getItem('apiToken') ? (
           <div className="api-token-input"></div>
         ) : (
