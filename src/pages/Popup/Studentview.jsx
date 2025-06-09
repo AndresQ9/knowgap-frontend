@@ -309,49 +309,6 @@ const StudentView = () => {
     return formattedVideos;
   };
 
-  const loadCourse = async (courseId, accessToken, link) => {
-    try {
-      setIsSyncingCourse(true);
-      setSyncError(null);
-
-      // 1. Update course database
-      const dbResponse = await fetch(`${BACKEND_URL}/update-course-db`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Origin': 'chrome-extension://' + chrome.runtime.id
-        },
-        body: JSON.stringify({
-          course_id: courseId,
-          access_token: accessToken,
-          link: link
-        }),
-        mode: 'cors',
-        credentials: 'include'
-      });
-
-      const dbData = await dbResponse.json();
-      if (dbData.status === 'Error') {
-        throw new Error(dbData.message);
-      }
-
-      return {
-        status: 'success',
-        message: 'Course database updated successfully'
-      };
-    } catch (error) {
-      console.error('Error updating course database:', error);
-      setSyncError(error.message);
-      return {
-        status: 'error',
-        message: error.message
-      };
-    } finally {
-      setIsSyncingCourse(false);
-    }
-  };
-
   const updateCourseContext = async (courseId, assignments, grade, name) => {
     try {
       const contextResponse = await fetch(`${BACKEND_URL}/update-course-context`, {
@@ -399,25 +356,28 @@ const StudentView = () => {
       const baseUrl = getCanvasBaseUrl();
 
       if (courseId && storedToken && baseUrl) {
-        // First update the course database
-        const dbResult = await loadCourse(courseId, storedToken, baseUrl);
-        if (dbResult.status === 'success') {
-          // Then fetch all the required data
-          await fetchAssignments(courseId);
-          const enrollment = await fetchEnrollment(courseId);
-          if (enrollment) {
-            setStudentName(enrollment.user.name);
+        await fetchAssignments(courseId);
+        const enrollment = await fetchEnrollment(courseId);
+        if (enrollment) {
+          setStudentName(enrollment.user.name);
+        }
+        const userId = await fetchUserProfile();
+        let recommendations = null;
+        if (userId) {
+          recommendations = await fetchVideoRecommendations(userId, courseId);
+          if (recommendations) {
+            setRecommendedVideos(formatVideoRecommendations(recommendations));
           }
-          const userId = await fetchUserProfile();
-          if (userId) {
-            const recommendations = await fetchVideoRecommendations(userId, courseId);
-            if (recommendations) {
-              setRecommendedVideos(formatVideoRecommendations(recommendations));
-            }
-          }
+        }
 
-          // Finally update the course context with all the data
-          await updateCourseContext(courseId, assignments, classGrade, studentName);
+        // Only call updateCourseContext if all required data is present
+        if (assignments.length > 0 && classGrade !== 'N/A' && studentName) {
+          try {
+            await updateCourseContext(courseId, assignments, classGrade, studentName);
+          } catch (error) {
+            // Log error but do not set syncError if main data is present
+            console.error('Error updating course context:', error);
+          }
         }
       }
     };
@@ -624,9 +584,6 @@ const StudentView = () => {
                 </div>
               </div>
             </div>
-            <button onClick={removeToken} className="token-remove">
-              Remove Token
-            </button>
           </div>
         )}
       </div>

@@ -147,32 +147,33 @@ const Popup = () => {
         return;
       }
 
-      // First update the course database
-      const dbResult = await loadCourse(courseId, storedToken, baseUrl);
-      if (dbResult.status === 'success') {
-        const myHeaders = new Headers();
-        myHeaders.append('Authorization', `Bearer ${storedToken}`);
+      const myHeaders = new Headers();
+      myHeaders.append('Authorization', `Bearer ${storedToken}`);
 
-        const requestOptions = {
-          method: 'GET',
-          headers: myHeaders,
-          redirect: 'follow',
-        };
+      const requestOptions = {
+        method: 'GET',
+        headers: myHeaders,
+        redirect: 'follow',
+      };
 
-        try {
-          const response = await fetch(
-            `${baseUrl}/api/v1/courses/${courseId}/enrollments?user_id=self`,
-            requestOptions
-          );
-          const enrollmentData = await response.json();
-          const role = enrollmentData[0].type;
-          setUserRole(role);
+      try {
+        const response = await fetch(
+          `${baseUrl}/api/v1/courses/${courseId}/enrollments?user_id=self`,
+          requestOptions
+        );
+        const enrollmentData = await response.json();
+        const role = enrollmentData[0].type;
+        setUserRole(role);
 
-          // Then update the course context with the role
-          await updateCourseContext(courseId, role);
-        } catch (error) {
-          console.error('Error fetching user role:', error);
+        // Only instructors should call loadCourse
+        if (role === 'TeacherEnrollment') {
+          await loadCourse(courseId, storedToken, baseUrl);
         }
+
+        // Then update the course context with the role
+        await updateCourseContext(courseId, role);
+      } catch (error) {
+        console.error('Error fetching user role:', error);
       }
     };
 
@@ -228,72 +229,70 @@ const Popup = () => {
   };
 
   return (
-    <div className="container">
-      {!localStorage.getItem('apiToken') && !userRole ? (
-        <>
-          <div className="token-input-container">
-            <input
-              type="password"
-              value={apiToken}
-              onChange={e => setApiToken(e.target.value)}
-              placeholder="Enter your Canvas API token"
-              className="token-input"
-            />
-            <button
-              onClick={handleTokenSubmit}
-              className="token-submit"
-            >
-              Submit Token
-            </button>
-            {tokenStatus && (
-              <p className={`token-status ${tokenStatus.includes('successfully') ? 'success' : 'error'}`}>
-                {tokenStatus}
-              </p>
-            )}
-          </div>
-
-          <div className="mt-4 text-center">
-            <button
-              className="feedback-button px-4 py-2 rounded"
-              onClick={() => window.open(FEEDBACK_URL, "_blank")}
-            >
-              Give Feedback
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          {isSyncingCourse && (
-            <div className="sync-status">
-              Syncing course data...
-            </div>
-          )}
-          {syncError && (
-            <div className="error-message">
-              Error: {syncError}
-            </div>
-          )}
-          {userRole === 'TeacherEnrollment' ? (
-            <>
-              <InstructorView />
-            </>
-          ) : userRole === 'StudentEnrollment' ? (
-            <>
-              <StudentView />
-              <button onClick={removeToken} className="token-remove">
-                Remove Token
+    <div className="container" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1 }}>
+        {!localStorage.getItem('apiToken') && !userRole ? (
+          <>
+            <div className="token-input-container">
+              <input
+                type="password"
+                value={apiToken}
+                onChange={e => setApiToken(e.target.value)}
+                placeholder="Enter your Canvas API token"
+                className="token-input"
+              />
+              <button
+                onClick={handleTokenSubmit}
+                className="token-submit"
+              >
+                Submit Token
               </button>
-            </>
-          ) : (
-            <p>Navigate to a course to view your data.</p>
-          )}
-        </>
-      )}
-      {localStorage.getItem('apiToken') && !userRole && (
-        <button onClick={removeToken} className="token-remove">
-          Remove Token
+              {tokenStatus && (
+                <p className={`token-status ${tokenStatus.includes('successfully') ? 'success' : 'error'}`}>
+                  {tokenStatus}
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            {isSyncingCourse && (
+              <div className="sync-status">
+                Syncing course data...
+              </div>
+            )}
+            {syncError && (
+              <div className="error-message">
+                Error: {syncError}
+              </div>
+            )}
+            {userRole === 'TeacherEnrollment' ? (
+              <>
+                <InstructorView />
+              </>
+            ) : userRole === 'StudentEnrollment' ? (
+              <>
+                <StudentView />
+              </>
+            ) : (
+              <p>Navigate to a course to view your data.</p>
+            )}
+          </>
+        )}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginTop: '2rem' }}>
+        {localStorage.getItem('apiToken') && (
+          <button onClick={removeToken} className="token-remove">
+            Remove Token
+          </button>
+        )}
+        <button
+          className="feedback-button px-4 py-2 rounded"
+          onClick={() => window.open(FEEDBACK_URL, "_blank")}
+        >
+          Give Feedback
         </button>
-      )}
+      </div>
     </div>
   );
 };
