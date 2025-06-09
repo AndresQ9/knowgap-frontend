@@ -332,26 +332,6 @@ const InstructorView = () => {
         throw new Error('Failed to update course database');
       }
 
-      // 2. Update course context
-      const contextResponse = await fetch(`${BACKEND_URL}/update-course-context`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Origin': 'chrome-extension://' + chrome.runtime.id
-        },
-        body: JSON.stringify({
-          course_id: courseId,
-          course_context: courseContext
-        }),
-        mode: 'cors',
-        credentials: 'include'
-      });
-
-      if (!contextResponse.ok) {
-        throw new Error('Failed to update course context');
-      }
-
       return {
         status: 'success',
         message: 'Course data synchronized successfully'
@@ -403,7 +383,7 @@ const InstructorView = () => {
         );
         setStudents(studentData);
         fetchCourseVideos(courseId);
-        
+
         // Fetch quizzes for the course
         const quizzesData = await fetchQuizzes(courseId);
         setQuizzes(quizzesData);
@@ -444,8 +424,8 @@ const InstructorView = () => {
     return riskFactor === 1
       ? 'bg-red-600'
       : riskFactor === 0.5
-      ? 'bg-yellow-500'
-      : 'bg-green-500';
+        ? 'bg-yellow-500'
+        : 'bg-green-500';
   };
 
   const getClassPerformanceOverview = () => {
@@ -486,7 +466,7 @@ const InstructorView = () => {
 
   const fetchCourseVideos = async (courseId) => {
     const fullUrl = `${BACKEND_URL}/get-course-videos`;
-    
+
     try {
       const response = await new Promise((resolve, reject) => {
         if (!chrome.runtime) {
@@ -1020,10 +1000,10 @@ const InstructorView = () => {
                       ) === 1
                         ? styles.highRiskTag
                         : calculateRiskFactor(
-                            calculateAverageScore(student.scores)
-                          ) === 0.5
-                        ? styles.mediumRiskTag
-                        : styles.lowRiskTag),
+                          calculateAverageScore(student.scores)
+                        ) === 0.5
+                          ? styles.mediumRiskTag
+                          : styles.lowRiskTag),
                     }}
                   >
                     {calculateRiskFactor(
@@ -1031,10 +1011,10 @@ const InstructorView = () => {
                     ) === 1
                       ? 'High Risk'
                       : calculateRiskFactor(
-                          calculateAverageScore(student.scores)
-                        ) === 0.5
-                      ? 'Medium Risk'
-                      : 'Low Risk'}
+                        calculateAverageScore(student.scores)
+                      ) === 0.5
+                        ? 'Medium Risk'
+                        : 'Low Risk'}
                   </span>
                 </div>
               </li>
@@ -1132,8 +1112,8 @@ const InstructorView = () => {
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem' }}>Select Quiz:</label>
             {isLoadingQuizzes ? (
-              <div style={{ 
-                padding: '1rem', 
+              <div style={{
+                padding: '1rem',
                 textAlign: 'center',
                 backgroundColor: '#f7fafc',
                 borderRadius: '0.375rem',
@@ -1218,7 +1198,7 @@ const InstructorView = () => {
                 border: '1px solid #e2e8f0',
               }}
             />
-            <button 
+            <button
               onClick={handleAddVideo}
               style={{
                 backgroundColor: '#4299e1',
@@ -1253,8 +1233,8 @@ const InstructorView = () => {
               {isSyncingCourse ? 'Syncing Course...' : 'Refresh Course Data'}
             </button>
             {syncError && (
-              <div style={{ 
-                color: '#e53e3e', 
+              <div style={{
+                color: '#e53e3e',
                 marginBottom: '1rem',
                 padding: '0.5rem',
                 backgroundColor: '#fff5f5',
