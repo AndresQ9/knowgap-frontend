@@ -495,8 +495,16 @@ const InstructorView = () => {
         });
       });
 
-      setCourseQuestions(response.course_videos || []);
+      console.log('Course videos response:', response); // Debug log
+
+      if (response && response.course_videos) {
+        setCourseQuestions(response.course_videos);
+      } else {
+        console.log('No course videos found in response');
+        setCourseQuestions([]);
+      }
     } catch (error) {
+      console.error('Error fetching course videos:', error);
       setCourseQuestions([]); // Set empty array on error
     }
   };
