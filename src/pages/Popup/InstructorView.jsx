@@ -25,6 +25,7 @@ const InstructorView = () => {
   const [editingVideo, setEditingVideo] = useState(null);
   const [apiToken, setApiToken] = useState('');
   const [tokenStatus, setTokenStatus] = useState('');
+  const [updateSuccess, setUpdateSuccess] = useState(false);
 
   const imgs = { youtube: '/path/to/youtube/icon.png' };
 
@@ -621,7 +622,7 @@ const InstructorView = () => {
           'Origin': 'chrome-extension://' + chrome.runtime.id
         },
         body: JSON.stringify({
-          courseid: courseId,
+          course_id: courseId,
           course_context: courseContext,
         }),
         mode: 'cors',
@@ -631,8 +632,15 @@ const InstructorView = () => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       console.log('Course context updated successfully');
+      setUpdateSuccess(true);
+      setCourseContext(''); // Clear the textarea
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setUpdateSuccess(false);
+      }, 3000);
     } catch (error) {
       console.error('Error updating course context:', error);
+      setUpdateSuccess(false);
     }
   };
 
@@ -1259,6 +1267,18 @@ const InstructorView = () => {
           >
             Update Course Context
           </button>
+          {updateSuccess && (
+            <div style={{
+              color: '#48bb78',
+              marginTop: '1rem',
+              padding: '0.5rem',
+              backgroundColor: '#f0fff4',
+              borderRadius: '0.375rem',
+              textAlign: 'center'
+            }}>
+              Success! Course context updated successfully.
+            </div>
+          )}
         </div>
       </div>
     </body>
